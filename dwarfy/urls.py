@@ -20,5 +20,6 @@ import api
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('', include('url_call.urls')),
     path('api/', include('api.urls'))
 ]

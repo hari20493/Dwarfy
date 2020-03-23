@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pytz
 from django.db.models import F, Count
 from django.db.models.functions import TruncHour, TruncDay, TruncSecond, ExtractDay, ExtractHour, TruncMonth, \
@@ -51,7 +53,8 @@ class Report(ApiView):
             .annotate(hour=TruncHour('hit_time', tzinfo=pytz.timezone('Asia/Kolkata'))) \
             .values('hour') \
             .annotate(events=Count('url__long_url')) \
-            .order_by('hour').annotate(time=ExtractHour('hit_time', tzinfo=pytz.timezone('Asia/Kolkata')))
+            .order_by('hour').annotate(time=ExtractHour('hit_time', tzinfo=pytz.timezone('Asia/Kolkata'))).filter(
+            hit_time__date=datetime.date(datetime.now()))
         hits_per_day = Logs.objects \
             .filter(url__slug=kwargs['slug']) \
             .annotate(day=TruncDay('hit_time')) \
@@ -67,7 +70,8 @@ class Report(ApiView):
         dict["data"] = {
             'hits_per_hour': list(hits_per_hour),
             'hits_per_day': list(hits_per_day),
-            'hits_per_month': list(hits_per_month)
+            'hits_per_month': list(hits_per_month),
+            "day":datetime.date(datetime.now())
 
         }
         self.flag = StatusCode.HTTP_200_OK
@@ -79,17 +83,15 @@ def search(self):
         search_slug = self.GET.get('query', '')
         dict = {}
         if search_slug:
-            url_objects = Reports.objects.get(url__title__icontains=search_slug)
-            dict = {
-                "title": url_objects.url.title,
-                "url": url_objects.url.long_url,
-                "slug": url_objects.url.slug,
-                "hits": url_objects.hits
-            }
+            url_objects = Reports.objects.filter(url__title__icontains=search_slug).annotate(
+                long_url=F('url__long_url'), title=F('url__title'),slug=F('url__slug')).values()
+            dict['data'] = (list(url_objects))
+
         else:
             dict['data'] = []
             dict['message'] = "No matching title exists in our list"
         self.flag = StatusCode.HTTP_200_OK
-    except:
+    except Exception as e:
+        dict['data'] = str(e)
         self.flag = StatusCode.HTTP_500_INTERNAL_SERVER_ERROR
     return JsonWrapper(dict, self.flag)
